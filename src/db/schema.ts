@@ -13,14 +13,11 @@ import {
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
-/**
- * LISA-PAM v2 fleet schema.
- *
- * Five tables: devices, telemetry, captures, consumables, alerts.
- * Device id is the factory string (lisa-pam-001), not a UUID.
- */
-
+/** Factory id (lisa-pam-001), not a UUID. */
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
+
+const serialId = () =>
+  bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity();
 
 export const devices = pgTable(
   'devices',
@@ -37,13 +34,14 @@ export const devices = pgTable(
   (table) => [check('devices_tier_check', sql`${table.tier} IN ('b2c', 'b2b', 'b2g')`)],
 );
 
+const deviceId = (onDelete: 'cascade' | 'set null') =>
+  text('device_id').references(() => devices.id, { onDelete });
+
 export const telemetry = pgTable(
   'telemetry',
   {
-    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
-    deviceId: text('device_id')
-      .notNull()
-      .references(() => devices.id, { onDelete: 'cascade' }),
+    id: serialId(),
+    deviceId: deviceId('cascade').notNull(),
     ts: timestamptz('ts').notNull(),
     temp: real('temp'),
     humidity: real('humidity'),
@@ -66,10 +64,8 @@ export const telemetry = pgTable(
 export const captures = pgTable(
   'captures',
   {
-    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
-    deviceId: text('device_id')
-      .notNull()
-      .references(() => devices.id, { onDelete: 'cascade' }),
+    id: serialId(),
+    deviceId: deviceId('cascade').notNull(),
     ts: timestamptz('ts').notNull(),
     edgeClass: text('edge_class'),
     cloudClass: text('cloud_class'),
@@ -86,10 +82,8 @@ export const captures = pgTable(
 export const consumables = pgTable(
   'consumables',
   {
-    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
-    deviceId: text('device_id')
-      .notNull()
-      .references(() => devices.id, { onDelete: 'cascade' }),
+    id: serialId(),
+    deviceId: deviceId('cascade').notNull(),
     kind: text('kind').notNull(),
     installedAt: timestamptz('installed_at').notNull().defaultNow(),
     expiresAt: timestamptz('expires_at'),
@@ -108,8 +102,8 @@ export const consumables = pgTable(
 export const alerts = pgTable(
   'alerts',
   {
-    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
-    deviceId: text('device_id').references(() => devices.id, { onDelete: 'set null' }),
+    id: serialId(),
+    deviceId: deviceId('set null'),
     type: text('type').notNull(),
     severity: text('severity').notNull().default('info'),
     message: text('message'),
@@ -118,9 +112,6 @@ export const alerts = pgTable(
   (table) => [
     index('alerts_device_created_idx').on(table.deviceId, table.createdAt.desc()),
     index('alerts_created_idx').on(table.createdAt.desc()),
-    check(
-      'alerts_severity_check',
-      sql`${table.severity} IN ('critical', 'warning', 'info')`,
-    ),
+    check('alerts_severity_check', sql`${table.severity} IN ('critical', 'warning', 'info')`),
   ],
 );

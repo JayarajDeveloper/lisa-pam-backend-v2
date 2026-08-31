@@ -4,7 +4,7 @@ services:
     container_name: lisa-pam-v2-postgres
     restart: unless-stopped
     ports:
-      - "55432:5432"
+      - "127.0.0.1:55432:5432"
     environment:
       POSTGRES_USER: lisa
       POSTGRES_PASSWORD: lisa
